@@ -1,6 +1,6 @@
 # 🪟 OpenWrt Package Downloader (Windows)
 
-A smart tool for downloading OpenWrt packages with all their dependencies for offline use.
+A smart tool powered by python for downloading OpenWrt packages with all their dependencies for offline use.
 
 This project provides a **Windows executable (.exe)** for easy usage, and the **original Python source code** is also included.
 
@@ -14,6 +14,7 @@ The script works similarly to how an OpenWrt router installs packages.
 - Designed for offline package preparation
 - Simple and easy to use
 - Windows ready (.exe included)
+
 
 > ⚠️ **Windows Notice**
 >
