@@ -36,7 +36,7 @@ The tool will:
 - Resolve dependencies
 - Download all required packages automatically
 
-Just like OpenWrt does on the router 🥳
+Just like how OpenWrt does on the router 🥳
 
 ## 📦 Package Groups (Folder Organization)
 
