@@ -4,7 +4,7 @@ A smart tool powered by python for downloading OpenWrt packages with all their d
 
 This project provides a **Windows executable (.exe)** for easy usage, and the **original Python source code** is also included.
 
-The script works similarly to how an OpenWrt router installs packages.
+The script works similarly to how opkg in OpenWrt downloads packages.
 
 ## ✨ Features
 
