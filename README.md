@@ -31,12 +31,12 @@ The script uses your firmware's `distfeeds.conf` file to access the correct Open
 3. Add the packages you want to download (one package per line).
 4. Run the program.
 
-The tool will:
+The tool will :
 - Read repository sources from `distfeeds.conf`
 - Resolve dependencies
 - Download all required packages automatically
 
-Just like how OpenWrt does on the router 🥳
+Just like OPKG in the OpenWRT! 🥳
 
 ## 📦 Package Groups (Folder Organization)
 
@@ -46,10 +46,12 @@ This is useful if you want each package and its dependencies to be stored in a d
 
 To do this, add a folder name starting with `/` in the `packages.txt` file.
 
-Example:
-/dnsmasq-full and depends dnsmasq-full
-
-The script will:
+Example :
+```
+/dnsmasq-full and depends
+dnsmasq-full
+```
+The script will :
 
 - Create a folder named **dnsmasq-full and depends**
 - Download the package below it
