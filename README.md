@@ -36,7 +36,7 @@ The tool will :
 - Resolve dependencies
 - Download all required packages automatically
 
-Just like OPKG in the OpenWRT! 🥳
+Just like the OPKG in OpenWRT! 🥳
 
 ## 📦 Package Groups (Folder Organization)
 
