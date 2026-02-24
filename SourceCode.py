@@ -3,7 +3,7 @@ import sys
 import subprocess
 import re
 from collections import defaultdict
-# ────────────────────────────────────────────────
+
 # Color support with safe fallback
 colorama_available = False
 Fore = Style = None
@@ -16,14 +16,14 @@ except ImportError:
     print("colorama not found. Attempting to install automatically...")
     try:
         subprocess.check_call([sys.executable, "-m", "pip", "install", "colorama"])
-        print("colorama installed successfully. Reloading...")
+        print("colorama installed successfully.")
         from colorama import init, Fore, Style
         init(autoreset=True)
         colorama_available = True
-    except Exception as install_error:
-        print(f"Failed to install colorama: {install_error}")
-        print("Continuing without colors...")
+    except Exception:
+        print("Failed to install colorama. Continuing without colors...")
         colorama_available = False
+
 # Automatically install 'requests' if missing
 try:
     import requests
@@ -39,11 +39,7 @@ except ImportError:
         sys.exit(1)
 
 # ────────────────────────────────────────────────
-# Configuration
-RELEASE = "24.10.5"
-ARCH = "aarch64_cortex-a53"
-
-REPO_FILE = "distfeeds.conf"          # File containing repo definitions
+REPO_FILE = "distfeeds.conf"
 DOWNLOAD_DIR = "downloads"
 PACKAGES_FILE = "packages.txt"
 
@@ -51,7 +47,6 @@ os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 
 downloaded = set()
 
-# Built-in / virtual packages that are always present → skip
 SKIP_PACKAGES = {
     "libc", "libgcc", "libgcc1", "libpthread", "librt", "libm", "libdl",
     "libutil", "libresolv", "ld-linux", "ld.so", "libcrypt", "libnsl",
@@ -60,10 +55,15 @@ SKIP_PACKAGES = {
 }
 
 def load_repos_from_distfeeds():
-    """Read and parse repos from distfeeds.conf file"""
     if not os.path.exists(REPO_FILE):
-        print(f"File {REPO_FILE} not found!")
-        print("Please create distfeeds.conf and add your src/gz lines.")
+        if colorama_available:
+            print(Fore.RED + f"File {REPO_FILE} not found!" + Style.RESET_ALL)
+        else:
+            print(f"File {REPO_FILE} not found!")
+        if colorama_available:
+            print(Fore.YELLOW + "Please create distfeeds.conf and add your src/gz lines." + Style.RESET_ALL)
+        else:
+            print("Please create distfeeds.conf and add your src/gz lines.")
         sys.exit(1)
     
     repos = []
@@ -73,7 +73,6 @@ def load_repos_from_distfeeds():
             if not line or line.startswith('#'):
                 continue
             
-            # Match lines like: src/gz openwrt_core https://...
             match = re.match(r'^(src(?:/gz)?)\s+(\S+)\s+(https?://\S+)', line)
             if match:
                 repo_name = match.group(2)
@@ -84,22 +83,21 @@ def load_repos_from_distfeeds():
                     repos.append({"name": "unknown_repo", "url": line.strip()})
     
     if not repos:
-        print(f"No valid repositories found in {REPO_FILE}!")
+        if colorama_available:
+            print(Fore.RED + f"No valid repositories found in {REPO_FILE}!" + Style.RESET_ALL)
+        else:
+            print(f"No valid repositories found in {REPO_FILE}!")
         sys.exit(1)
     
-    print(f"{len(repos)} repositories loaded from {REPO_FILE}:")
+    if colorama_available:
+        print(Fore.GREEN + f"{len(repos)} repositories loaded from {REPO_FILE}:" + Style.RESET_ALL)
+    else:
+        print(f"{len(repos)} repositories loaded from {REPO_FILE}:")
+    
     for r in repos:
         print(f"  - {r['name']}: {r['url']}")
     
     return repos
-
-if colorama_available:
-    
-    print(Fore.GREEN + "distfeeds.conf file found" + Style.RESET_ALL)
-
-else:
-
-    print("distfeeds.conf file found")
 
 def download_file(url, dest):
     if os.path.exists(dest) and os.path.getsize(dest) > 0:
@@ -110,6 +108,7 @@ def download_file(url, dest):
     try:
         r = requests.get(url, stream=True, timeout=30)
         r.raise_for_status()
+        os.makedirs(os.path.dirname(dest), exist_ok=True)
         with open(dest, 'wb') as f:
             for chunk in r.iter_content(chunk_size=8192):
                 f.write(chunk)
@@ -118,11 +117,10 @@ def download_file(url, dest):
         print(f"Failed to download {url}: {e}")
         return False
 
-def get_packages_content(repo_info):
-    base_url = repo_info["url"]
+def get_packages_content(repo_url):
     for suffix in ["/Packages", "/Packages.gz"]:
         try:
-            r = requests.get(base_url + suffix, timeout=15)
+            r = requests.get(repo_url + suffix, timeout=15)
             if r.status_code == 200:
                 if suffix.endswith(".gz"):
                     import gzip
@@ -130,7 +128,6 @@ def get_packages_content(repo_info):
                 return r.text
         except:
             pass
-    print(f"Cannot fetch Packages from {repo_info['name']} ({repo_info['url']})")
     return ""
 
 def build_package_index(repo_urls):
@@ -140,7 +137,7 @@ def build_package_index(repo_urls):
     total_text = ""
     for repo in repo_urls:
         print(f"Fetching index from repo: {repo['name']}")
-        content = get_packages_content(repo)
+        content = get_packages_content(repo['url'])
         if content:
             total_text += content + "\n\n"
     
@@ -194,12 +191,14 @@ def resolve_and_download(pkg_name, pkg_index, prov_index, to_download_set, curre
         return False
     
     found = False
+    repo_url = None
     for repo in REPO_URLS:
         test_url = f"{repo['url']}/{filename}"
         try:
             r = requests.head(test_url, timeout=2)
             if r.status_code == 200:
                 url = test_url
+                repo_url = repo['url']
                 found = True
                 break
         except:
@@ -209,14 +208,19 @@ def resolve_and_download(pkg_name, pkg_index, prov_index, to_download_set, curre
         print(f"  Could not locate download URL for: {filename}")
         return False
     
-    # Determine save path: if subdir specified, save inside it
-    if current_subdir:
-        save_dir = os.path.join(DOWNLOAD_DIR, current_subdir)
-        os.makedirs(save_dir, exist_ok=True)
+    # Extract relative repository path after 'releases/24.10.5/'
+    if "releases/24.10.5/" in repo_url:
+        relative_path = repo_url.split("releases/24.10.5/")[-1]
     else:
-        save_dir = DOWNLOAD_DIR
+        relative_path = "unknown_repo"
     
-    dest = os.path.join(save_dir, os.path.basename(filename))
+    # Build save path: group (if any) + relative repo path
+    if current_subdir:
+        base_save = os.path.join(DOWNLOAD_DIR, current_subdir, relative_path)
+    else:
+        base_save = os.path.join(DOWNLOAD_DIR, relative_path)
+    
+    dest = os.path.join(base_save, os.path.basename(filename))
     
     if download_file(url, dest):
         downloaded.add(pkg_name)
@@ -228,7 +232,6 @@ def resolve_and_download(pkg_name, pkg_index, prov_index, to_download_set, curre
 
 # ────────────────────────────────────────────────
 if __name__ == "__main__":
-    # Load repos from distfeeds.conf
     REPO_URLS = load_repos_from_distfeeds()
     
     if not os.path.exists(PACKAGES_FILE):
@@ -239,7 +242,7 @@ if __name__ == "__main__":
     print("\nLoading package indexes from distfeeds.conf repositories...\n")
     pkg_index, prov_index = build_package_index(REPO_URLS)
     
-    print("\nResolving and downloading:\n")
+    print("\nResolving and downloading with full repository structure inside groups:\n")
     to_download = set()
     
     current_subdir = None
@@ -249,22 +252,20 @@ if __name__ == "__main__":
             if not line or line.startswith("#"):
                 continue
             
-            # If line starts with / → new subdir/group
             if line.startswith("/"):
-                current_subdir = line[1:].strip()  # remove leading /
+                current_subdir = line[1:].strip()
                 print(f"\nStarting group: {current_subdir}")
                 continue
             
-            # Normal package name
             pkg = line
             print(f"• {pkg} (in {current_subdir if current_subdir else 'main'})")
             resolve_and_download(pkg, pkg_index, prov_index, to_download, current_subdir)
     
-if colorama_available:
-    print(Fore.GREEN + f"\nFinished. Downloaded {len(downloaded)} packages." + Style.RESET_ALL)
-    print(Fore.CYAN + f"Files → {os.path.abspath(DOWNLOAD_DIR)}" + Style.RESET_ALL)
-    input(Fore.YELLOW + "\nPress Enter to Exit..." + Style.RESET_ALL)
-else:
-    print(f"\nFinished. Downloaded {len(downloaded)} packages.")
-    print(f"Files → {os.path.abspath(DOWNLOAD_DIR)}")
-    input("\nPress Enter to Exit...")
+    if colorama_available:
+        print(Fore.GREEN + f"\nFinished. Downloaded {len(downloaded)} packages." + Style.RESET_ALL)
+        print(Fore.CYAN + f"Files → {os.path.abspath(DOWNLOAD_DIR)}" + Style.RESET_ALL)
+        input(Fore.YELLOW + "\nPress Enter to Exit..." + Style.RESET_ALL)
+    else:
+        print(f"\nFinished. Downloaded {len(downloaded)} packages.")
+        print(f"Files → {os.path.abspath(DOWNLOAD_DIR)}")
+        input("\nPress Enter to Exit...")
