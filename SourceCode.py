@@ -1,3 +1,14 @@
+"""
+MIT License
+
+Copyright (c) 2026 AlirezaNeo
+Permission is hereby granted, free of charge, to any person obtaining a copyof this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software isfurnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in allcopies or substantial portions of the Software.
+"""
 import os
 import sys
 import subprocess
@@ -56,14 +67,8 @@ SKIP_PACKAGES = {
 
 def load_repos_from_distfeeds():
     if not os.path.exists(REPO_FILE):
-        if colorama_available:
-            print(Fore.RED + f"File {REPO_FILE} not found!" + Style.RESET_ALL)
-        else:
-            print(f"File {REPO_FILE} not found!")
-        if colorama_available:
-            print(Fore.YELLOW + "Please create distfeeds.conf and add your src/gz lines." + Style.RESET_ALL)
-        else:
-            print("Please create distfeeds.conf and add your src/gz lines.")
+        print(f"File {REPO_FILE} not found!")
+        print("Please create distfeeds.conf and add your src/gz lines.")
         sys.exit(1)
     
     repos = []
@@ -83,54 +88,24 @@ def load_repos_from_distfeeds():
                     repos.append({"name": "unknown_repo", "url": line.strip()})
     
     if not repos:
-        if colorama_available:
-            print(Fore.RED + f"No valid repositories found in {REPO_FILE}!" + Style.RESET_ALL)
-        else:
-            print(f"No valid repositories found in {REPO_FILE}!")
+        print(f"No valid repositories found in {REPO_FILE}!")
         sys.exit(1)
     
-    if colorama_available:
-        print(Fore.GREEN + f"{len(repos)} repositories loaded from {REPO_FILE}:" + Style.RESET_ALL)
-    else:
-        print(f"{len(repos)} repositories loaded from {REPO_FILE}:")
-    
+    print(f"{len(repos)} repositories loaded from {REPO_FILE}:")
     for r in repos:
         print(f"  - {r['name']}: {r['url']}")
     
     return repos
 
 def download_file(url, dest):
-    """
-    Download file and replace old version if filename is different (newer version).
-    """
-    file_name = os.path.basename(dest)
-    dir_path = os.path.dirname(dest)
-
-    # Find any existing file with the same package name but possibly different version
-    old_file = None
-    for existing in os.listdir(dir_path):
-        if existing.startswith(file_name.split('_')[0] + '_') and existing.endswith('.ipk'):
-            old_file = os.path.join(dir_path, existing)
-            break
-
-    # If an older version exists, remove it
-    if old_file and old_file != dest:
-        print(f"Newer version detected. Removing old file: {os.path.basename(old_file)}")
-        try:
-            os.remove(old_file)
-        except Exception as e:
-            print(f"Warning: Could not remove old file {old_file}: {e}")
-
-    # Now download if not already present (or after removal)
     if os.path.exists(dest) and os.path.getsize(dest) > 0:
-        print(f"Already exists (current version): {file_name}")
+        print(f"Already exists: {os.path.basename(dest)}")
         return True
-
-    print(f"Downloading new version: {file_name}")
+    
+    print(f"Downloading: {os.path.basename(dest)}")
     try:
         r = requests.get(url, stream=True, timeout=30)
         r.raise_for_status()
-        os.makedirs(dir_path, exist_ok=True)
         with open(dest, 'wb') as f:
             for chunk in r.iter_content(chunk_size=8192):
                 f.write(chunk)
@@ -138,6 +113,19 @@ def download_file(url, dest):
     except Exception as e:
         print(f"Failed to download {url}: {e}")
         return False
+
+def get_packages_content(repo_url):
+    for suffix in ["/Packages", "/Packages.gz"]:
+        try:
+            r = requests.get(repo_url + suffix, timeout=15)
+            if r.status_code == 200:
+                if suffix.endswith(".gz"):
+                    import gzip
+                    return gzip.decompress(r.content).decode('utf-8')
+                return r.text
+        except:
+            pass
+    return ""
 
 def build_package_index(repo_urls):
     package_index = {}
@@ -200,14 +188,12 @@ def resolve_and_download(pkg_name, pkg_index, prov_index, to_download_set, curre
         return False
     
     found = False
-    repo_url = None
     for repo in REPO_URLS:
         test_url = f"{repo['url']}/{filename}"
         try:
             r = requests.head(test_url, timeout=2)
             if r.status_code == 200:
                 url = test_url
-                repo_url = repo['url']
                 found = True
                 break
         except:
@@ -217,19 +203,13 @@ def resolve_and_download(pkg_name, pkg_index, prov_index, to_download_set, curre
         print(f"  Could not locate download URL for: {filename}")
         return False
     
-    # Extract relative repository path after 'releases/24.10.5/'
-    if "releases/24.10.5/" in repo_url:
-        relative_path = repo_url.split("releases/24.10.5/")[-1]
-    else:
-        relative_path = "unknown_repo"
-    
-    # Build save path: group (if any) + relative repo path
     if current_subdir:
-        base_save = os.path.join(DOWNLOAD_DIR, current_subdir, relative_path)
+        save_dir = os.path.join(DOWNLOAD_DIR, current_subdir)
+        os.makedirs(save_dir, exist_ok=True)
     else:
-        base_save = os.path.join(DOWNLOAD_DIR, relative_path)
+        save_dir = DOWNLOAD_DIR
     
-    dest = os.path.join(base_save, os.path.basename(filename))
+    dest = os.path.join(save_dir, os.path.basename(filename))
     
     if download_file(url, dest):
         downloaded.add(pkg_name)
@@ -251,7 +231,7 @@ if __name__ == "__main__":
     print("\nLoading package indexes from distfeeds.conf repositories...\n")
     pkg_index, prov_index = build_package_index(REPO_URLS)
     
-    print("\nResolving and downloading with full repository structure inside groups:\n")
+    print("\nResolving and downloading:\n")
     to_download = set()
     
     current_subdir = None
