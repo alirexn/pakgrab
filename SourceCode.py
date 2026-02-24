@@ -100,15 +100,37 @@ def load_repos_from_distfeeds():
     return repos
 
 def download_file(url, dest):
+    """
+    Download file and replace old version if filename is different (newer version).
+    """
+    file_name = os.path.basename(dest)
+    dir_path = os.path.dirname(dest)
+
+    # Find any existing file with the same package name but possibly different version
+    old_file = None
+    for existing in os.listdir(dir_path):
+        if existing.startswith(file_name.split('_')[0] + '_') and existing.endswith('.ipk'):
+            old_file = os.path.join(dir_path, existing)
+            break
+
+    # If an older version exists, remove it
+    if old_file and old_file != dest:
+        print(f"Newer version detected. Removing old file: {os.path.basename(old_file)}")
+        try:
+            os.remove(old_file)
+        except Exception as e:
+            print(f"Warning: Could not remove old file {old_file}: {e}")
+
+    # Now download if not already present (or after removal)
     if os.path.exists(dest) and os.path.getsize(dest) > 0:
-        print(f"Already exists: {os.path.basename(dest)}")
+        print(f"Already exists (current version): {file_name}")
         return True
-    
-    print(f"Downloading: {os.path.basename(dest)}")
+
+    print(f"Downloading new version: {file_name}")
     try:
         r = requests.get(url, stream=True, timeout=30)
         r.raise_for_status()
-        os.makedirs(os.path.dirname(dest), exist_ok=True)
+        os.makedirs(dir_path, exist_ok=True)
         with open(dest, 'wb') as f:
             for chunk in r.iter_content(chunk_size=8192):
                 f.write(chunk)
@@ -116,19 +138,6 @@ def download_file(url, dest):
     except Exception as e:
         print(f"Failed to download {url}: {e}")
         return False
-
-def get_packages_content(repo_url):
-    for suffix in ["/Packages", "/Packages.gz"]:
-        try:
-            r = requests.get(repo_url + suffix, timeout=15)
-            if r.status_code == 200:
-                if suffix.endswith(".gz"):
-                    import gzip
-                    return gzip.decompress(r.content).decode('utf-8')
-                return r.text
-        except:
-            pass
-    return ""
 
 def build_package_index(repo_urls):
     package_index = {}
