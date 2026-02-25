@@ -1,8 +1,8 @@
 # 🪟 OpenWrt Package Downloader (Windows)
 
-A smart tool powered by python for downloading OpenWrt packages with all their dependencies for offline use.
+A smart tool powered by python for downloading OpenWrt packages with all their dependencies for offline use
 
-This project provides a **Windows executable (.exe)** for easy usage, and the **original Python source code** is also included.
+This project provides a **Windows executable (.exe)** for easy usage, and the **original Python source code** is also included
 
 The script works similarly to how opkg in OpenWrt downloads packages.
 
@@ -26,10 +26,10 @@ The script works similarly to how opkg in OpenWrt downloads packages.
 
 The script uses your firmware's `distfeeds.conf` file to access the correct OpenWrt repositories.
 
-1. Place your `distfeeds.conf` file in the same folder as the script.
-2. Create a file named `packages.txt`.
-3. Add the packages you want to download (one package per line).
-4. Run the program.
+1. Place your `distfeeds.conf` file in the same folder as the script
+2. Create a file named `packages.txt`
+3. Add the packages you want to download (one package per line)
+4. Run the program
 
 The tool will :
 - Read repository sources from `distfeeds.conf`
