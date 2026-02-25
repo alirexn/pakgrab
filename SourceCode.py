@@ -34,7 +34,8 @@ except ImportError:
     except Exception:
         print("Failed to install colorama. Continuing without colors...")
         colorama_available = False
-
+        
+print("Copyright (c) 2026 github.com/alirexn")
 # Automatically install 'requests' if missing
 try:
     import requests
@@ -117,7 +118,7 @@ def download_file(url, dest):
     
     print(f"Downloading: {os.path.basename(dest)}")
     try:
-        r = requests.get(url, stream=True, timeout=30)
+        r = requests.get(url, stream=True, timeout=5)
         r.raise_for_status()
         os.makedirs(os.path.dirname(dest), exist_ok=True)
         with open(dest, 'wb') as f:
@@ -129,18 +130,45 @@ def download_file(url, dest):
         return False
 
 def get_packages_content(repo_url):
-    for suffix in ["/Packages", "/Packages.gz"]:
+    """
+    Attempt to fetch Packages data from the repository.
+    Tries multiple common file variants in order of preference.
+    """
+    suffixes = [
+        "/Packages",          # plain text (most preferred)
+        "/Packages.gz",       # compressed
+        "/Packages.sig",      # signature file (we'll skip content but check existence if needed)
+    ]
+
+    for suffix in suffixes:
         try:
-            r = requests.get(repo_url + suffix, timeout=15)
+            full_url = repo_url + suffix
+            r = requests.get(full_url, timeout=5)
             if r.status_code == 200:
+                content = r.content
+
+                # Handle different formats
                 if suffix.endswith(".gz"):
                     import gzip
-                    return gzip.decompress(r.content).decode('utf-8')
-                return r.text
-        except:
+                    try:
+                        return gzip.decompress(content).decode('utf-8')
+                    except:
+                        continue  # decompress failed → try next
+                elif suffix.endswith(".sig"):
+                    # We don't need signature content for parsing
+                    # If you want to verify signature later, you can save it here
+                    print(f"Signature file found: {full_url}")
+                    continue  # skip signature content
+                else:
+                    # plain text
+                    return content.decode('utf-8')
+        except Exception as e:
+            # Silent fail for this suffix, try next
             pass
-    return ""
 
+    print(f"No usable Packages file found in {repo_url}")
+    return ""
+    
 def build_package_index(repo_urls):
     package_index = {}
     provides_index = defaultdict(list)
@@ -218,10 +246,9 @@ def resolve_and_download(pkg_name, pkg_index, prov_index, to_download_set, curre
     if not found:
         print(f"  Could not locate download URL for: {filename}")
         return False
-    
-    # Extract relative repository path after 'releases/24.10.5/'
-    if "releases/24.10.5/" in repo_url:
-        relative_path = repo_url.split("releases/24.10.5/")[-1]
+        
+    if "releases/" in repo_url:
+        relative_path = repo_url.split("releases/")[-1]
     else:
         relative_path = "unknown_repo"
     
